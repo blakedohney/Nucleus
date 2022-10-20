@@ -38,17 +38,18 @@ class NucleusInternal:
         return self.finds
 
     def run_finding_automation(self):
+        params_list = []
         for x in self.finds:
             project_id = x['project_id']
             for sev in x['vuln_criteria']:
                 severity = sev['display_value']
             for r in x['workflow_actions']:
-                action_type = r['action_type']
-                action_from = r['from']
-                action_offset = r['offset']
-                action_qualifier = r['qualifier']
-                action_display = f"Set {action_type}: {action_offset} {action_qualifier} from {action_from}"
                 if "due_date" in r['action_type']:
+                    action_type = r['action_type']
+                    action_from = r['from']
+                    action_offset = r['offset']
+                    action_qualifier = r['qualifier']
+                    action_display = f"Set {action_type}: {action_offset} {action_qualifier} from {action_from}"
                     
                     data = {
                     "workflow_criteria_asset_display":"",
@@ -59,16 +60,35 @@ class NucleusInternal:
                     data.update(x)
                     logging.info(data)
                 elif "assign" in  r['action_type']:
-                    print(x)
+                    for t in x['asset_criteria']:
+                        tag_name = t['rule_match_condition']
+                        qualifier = t['rule_match_qualifier']
+                        value = t['rule_match_value']
+                    workflow_criteria_asset_display = f"{tag_name} {qualifier} {value}"
+                    for w in x['workflow_actions']:
+                        workflow_actions_display = w['assign_team_dynamic']
+
+                    data = {
+                    "workflow_criteria_asset_display":f"<span class=\"tag_field\" style=\"background:#919191;border-radius:4px;\">{workflow_criteria_asset_display}</span>",
+                    "workflow_criteria_vuln_display":"",
+                    "workflow_actions_display":f"Assign team dynamically with: {workflow_actions_display}",
+                    "nonvalue":"non"}
+                    data.update(x)
+                    logging.info(data)
+
+
+
             params = {
                 "project_id": project_id,
                 "method":"runone",
-                "changes": data
+                "changes": data,
+                "csrfToken": self.cookie['csrfToken']
 
             }
+            params_list.append(params)
+        for params in params_list:
             full_url = f"{self.base_url}/nucleus/public/index.php/json/workflow"
             finding_rules = self.send_request(endpoint=full_url, method="POST", payload=params, content_type="application/x-www-form-urlencoded; charset=UTF-8")
-            return finding_rules
 
     def send_request(self, endpoint, method, payload = None, content_type = None):
         headers = {
@@ -89,8 +109,10 @@ class NucleusInternal:
             if "application/x-www-form-urlencoded" in content_type:
                 headers['content-type'] = content_type
                 response = requests.post(url=endpoint, verify= False, cookies=self.cookie, headers=headers, data=payload)
-                r_status = response.status_code
+                r_status = str(response.status_code)
                 print(r_status)
+                name = payload['changes']['workflow_name']
+                logging.info("sending payload for " + name + " status_code: " + r_status)
             else:
                 response = requests.post(url=endpoint, verify=False, cookies=self.cookie, headers=headers, data=payload)
         else:
