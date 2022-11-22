@@ -1,8 +1,43 @@
 import logging
+from time import sleep
+from wsgiref.headers import Headers
 import browser_cookie3
 import requests
+import selenium
+from msedge.selenium_tools import EdgeOptions
+from selenium import webdriver
+from selenium.webdriver.common.by import By
+from selenium.webdriver.common.keys import Keys
+from selenium.webdriver.support.ui import WebDriverWait
+from selenium.webdriver.support import expected_conditions as EC
+from selenium.webdriver.chrome.options import Options
+import time
+import re
+
 
 logging.basicConfig(filename='Nucleus_run_findings_rules.log', filemode='w',format='%(asctime)s - %(message)s', level=logging.INFO)
+
+def nuc_login(email, password):
+    
+
+    chromedriver = ".\driver\msedgedriver.exe"
+    global browser
+    browser = webdriver.Edge(chromedriver)
+    driverOptions = EdgeOptions()
+    driverOptions.add_experimental_option("excludeSwitches", ["enable-logging"])
+    browser.get('https://nucleus-us5.nucleussec.com/nucleus/public/app/index.php')
+    wait = WebDriverWait(browser,10)
+    wait.until(EC.element_to_be_clickable((By.ID, "textfield-1016-inputEl")))
+    username = browser.find_element(By.ID, "textfield-1016-inputEl")
+    username.send_keys(email)
+    wait.until(EC.element_to_be_clickable((By.ID, "button-1023-btnInnerEl"))).click()
+    passw = wait.until(EC.element_to_be_clickable((By.ID, "textfield-1018-inputEl")))
+    #passw = browser.find_element(By.ID, "textfield-1018-inputEl")
+    passw.click()
+    passw.send_keys(password)
+    
+    wait.until(EC.element_to_be_clickable((By.ID, "button-1023-btnInnerEl"))).click()
+    sleep(15)
 
 class NucleusInternal:
     """
@@ -18,13 +53,16 @@ class NucleusInternal:
     def get_chrome_cookie(self):
         new_cj = {}
         try:
-            cookiejar = browser_cookie3.edge()
+            # cookiejar = browser_cookie3.edge()
             result = False
             self.cookie = {}
-            for cookie in cookiejar:
-                if cookie.domain == self.domain and cookie.name in ['PHPSESSID', 'csrfToken']:
+            cookies = browser.get_cookies()
+            for cookie in cookies:
+                domain = self.domain
+                d = (domain.split(".",1)[1])
+                if d in cookie['domain'] and cookie['name'] in ['PHPSESSID', 'csrfToken']:
                     self.session = True
-                    self.cookie[cookie.name] = cookie.value
+                    self.cookie[cookie['name']] = cookie['value']
                     #self.cookie = self.format_cookie(new_cj)
             return self.cookie
         except Exception as error:
@@ -108,6 +146,7 @@ class NucleusInternal:
         if (method == "POST"):
             if "application/x-www-form-urlencoded" in content_type:
                 headers['content-type'] = content_type
+                print(self.cookie)
                 response = requests.post(url=endpoint, verify= False, cookies=self.cookie, headers=headers, data=payload)
                 r_status = str(response.status_code)
                 print(r_status)
@@ -124,7 +163,9 @@ class NucleusInternal:
         return response
 
 if __name__ == "__main__":
+    session = nuc_login('', '') #'username', #'password'
     nucleus_internal_obj = NucleusInternal(domain="nucleus-us5.nucleussec.com", org_id=2)
     nucleus_internal_obj.get_chrome_cookie()
     finding_rules = nucleus_internal_obj.get_finding_automation()
     run_findings = nucleus_internal_obj.run_finding_automation()
+    browser.quit()
